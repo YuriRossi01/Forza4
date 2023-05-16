@@ -6,8 +6,8 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
-#include "LibrerieInterne/errExit.h"
-#include "LibrerieInterne/shared_memory.h"
+#include "../inc/errExit.h"
+#include "../inc/shared_memory.h"
 #define G1 O
 #define G2 X
 

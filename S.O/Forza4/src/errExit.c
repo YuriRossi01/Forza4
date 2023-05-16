@@ -1,4 +1,4 @@
-#include "LibrerieInterne/errExit.h"
+#include "../inc/errExit.h"
 
 
 #include <stdio.h>

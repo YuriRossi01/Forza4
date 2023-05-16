@@ -6,8 +6,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "LibrerieInterne/errExit.h"
-#include "LibrerieInterne/shared_memory.h"
+#include "../inc/errExit.h"
+#include "../inc/shared_memory.h"
 
 int alloc_shared_memory(key_t key, size_t size){
     int shmid = shmget(key, size, IPC_CREAT | S_IRUSR | S_IWUSR);
