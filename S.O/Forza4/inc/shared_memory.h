@@ -1,11 +1,11 @@
 #ifndef _SHARED_MEMORY_HH
 #define _SHARED_MEMORY_HH
 #include <stdlib.h>
-// struttura richiesta:
+
 struct Request
 {
-    int shmid;
-    int matrix[50][50];
+    int pid1;
+    int pid2;
     int row;
     int col;
     //char gettone1;

@@ -17,8 +17,6 @@
 #define G1 O
 #define G2 X
 
-#define KEYSHM 15
-#define KEYSEM 16
 #define REQUEST 0
 #define PLAYER1 1
 #define PLAYER2 1
@@ -40,11 +38,6 @@ int create_sem_set(key_t semkey) {
     return semid;
 }
 
-unsigned int sizeof_dm(int rows, int cols, size_t sizeElement){
-    size_t size = rows * (sizeof(void *) + (cols * sizeElement));
-    return size;
-}
-
 int main (int argc, char *argv[]) {
     if (argc != 3){
         printf("devi inserire %s nRighe nColonne e i 2 gettoni->(O e X)\n", argv[0]);
@@ -60,24 +53,36 @@ int main (int argc, char *argv[]) {
         printf("le Colonne della matrice devono essere almeno di 5\n");
         exit(1);
     }
-    size_t sizeMatrix = sizeof_dm(row,col,sizeof(int));
-    // ho creato una memoria con  matrice, righe e collonne
-    int shmidServer = alloc_shared_memory(KEYSHM, sizeMatrix);
-    // attacco alla mem con le row e le col
-    struct Request *request = malloc(sizeof(struct Request));
-    request->shmid = (struct Request*)get_shared_memory(shmidServer,0);
+    key_t key_matrix, key_request;
+    printf("<Server> Creo la memoria condivisa per la matrice...\n");
+    key_matrix = ftok("./", 'a');
+    key_request = ftok("./", 'b');
+    int shmidServer = shmget(key_matrix, sizeof(int)*row*col, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    if(shmidServer == -1)
+        errExit("shmget matrice fallito");
+    int shmidRequest = shmget(key_request, sizeof(struct Request), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    if(shmidRequest == -1)
+        errExit("shmget request fallito");
+    printf("<Server> Collego la memoria condivisa per la matrice...\n");
+    int *matrix = get_shared_memory(shmidServer, 0);
+    struct Request *request = get_shared_memory(shmidRequest, 0); 
     request->row = row;
     request->col = col;
-    printf("ho scritto righe e col\n");
+    printf("<Server> Matrice pronta...\n%d %d", request->col, request->row);
 
     //Inizializzo semafori
-    int semid = create_sem_set(KEYSEM);
-    printf("Server in attesa dei client\n");
-    semOp(semid, REQUEST, -1);  //Blocco il server
-    printf("Player 1 collegato\n");
+    key_t key_sem = ftok("./", 'c');
+    int semid = create_sem_set(key_sem);
+    printf("<Server> In attesa dei client\n");
+    semOp(semid, REQUEST, -1);  //Blocco il server in attesa del client 1
+    printf("<Server> Player 1 collegato\n");
+    semOp(semid, REQUEST, -1);  //Blocco il server in attesa del client 2
+    printf("<Server> Player 2 collegato\n");
+    //printf("%d %d", request->pid1, request->pid2);
     //semOp(semid, REQUEST, 1);     //Sblocca il server
     //free_shared_memory(request);
     //remove_shared_memory(shmidServer);
+
 
 
 

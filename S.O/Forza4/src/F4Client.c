@@ -14,8 +14,6 @@
 #include "../inc/shared_memory.h"
 #include "../inc/semaphore.h"
 
-#define KEYSHM 15
-#define KEYSEM 16
 #define REQUEST 0
 #define PLAYER1 1
 #define PLAYER2 1
@@ -25,22 +23,34 @@ int main(int argc, char const *argv[])
 
     if(argc != 2){
         printf("Errore input\n");
+        exit(1);
     }
+
+    //Prendo la memoria condivisa per la matrice
+    key_t key_matrix = ftok("./", 'a');
+    key_t key_request = ftok("./", 'b');
+    int shmidRequest = shmget(key_request, sizeof(struct Request), IPC_CREAT | S_IRUSR | S_IWUSR);
+    if(shmidRequest == -1)
+        errExit("shmget request fallito");
+    struct Request *request = get_shared_memory(shmidRequest, 0); 
+    int shmidServer = shmget(key_matrix, sizeof(int)*request->row*request->col, IPC_CREAT | S_IRUSR | S_IWUSR);
+    if(shmidServer == -1)
+        errExit("shmget matrice fallito");
+    int *matrix = get_shared_memory(shmidServer, 0);
+    //Collego la memoria condivisa per la matrice
     //Semaforo del server
-    int semid = semget(KEYSEM, 2, S_IRUSR | S_IWUSR);
-    if (semid > 0) {
+    key_t key_sem = ftok("./", 'c');
+    int semid = semget(key_sem, 2, S_IRUSR | S_IWUSR);
+    if (semid >= 0) {
         //Sblocco il server 
         semOp(semid, REQUEST, 1);
-        printf("%s ", argv[1]);
-        //Ottengo la shm del server
-        int shmidServer = alloc_shared_memory(KEYSHM, sizeof(struct Request));
-        //Il client accede alla memoria condivisa del server
-        struct Request *request = (struct Request *)get_shared_memory(shmidServer, 0);
+        printf("Gioco Forza4\tGiocatore: %s\n%d %d", argv[1], request->col, request->row);
+        //request->pid1 = getpid();
+        //request->pid2 = getpid();
         int i,j;
-        printf("%d %d ", request->col, request->row);
         // wait for data
         //semOp(semid, PLAYER1, -1);
     } else
-        printf("semget failed");
+        printf("semget failed\n");
     return 0;
 }
