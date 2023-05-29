@@ -4,12 +4,11 @@
 
 struct Request
 {
-    int pid1;
-    int pid2;
+    int pid;
     int row;
     int col;
-    //char gettone1;
-    //char gettone2;
+    char gettone;
+    int input;
 };
 int alloc_shared_memory(key_t key, size_t size);
 
