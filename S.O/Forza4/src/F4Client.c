@@ -16,7 +16,9 @@
 
 #define REQUEST 0
 #define PLAYER 1
-#define PLAYER2 0
+#define PLAYER2 2
+#define MATRIX 3
+#define MATRIX2 4
 
 void stampaMatrice(char *matrix, int row, int col){
     int i,j;
@@ -49,23 +51,32 @@ int main(int argc, char const *argv[])
     //Collego la memoria condivisa per la matrice
     //Semaforo del server
     key_t key_sem = ftok("./", 'c');
-    int semid = semget(key_sem, 3, S_IRUSR | S_IWUSR);
+    int semid = semget(key_sem, 5, S_IRUSR | S_IWUSR);
     if (semid >= 0) {
         request->pid = getpid();
         //Sblocco il server 
         semOp(semid, REQUEST, 1);
         printf("Gioco Forza4\tGiocatore: %s(%c)\nDimensione campo da gioco: (%d %d)\n", argv[1], request->gettone, request->col, request->row);
         int input;
-        stampaMatrice(matrix, request->row, request->col);
-        // wait for data
-        printf("<Client> Attesa turno di gioco...\n");
-        semOp(semid, PLAYER, -1);
-        printf("<Client> E' il tuo turno\nScegli in quale colonna giocare: ");
-        scanf("%d", &input);
-        request->input = input;
-        semOp(semid, REQUEST, 1);
-        semOp(semid, PLAYER2, -1);
-        stampaMatrice(matrix, request->row, request->col);
+        while(1){
+            semOp(semid, MATRIX, -1);   //Il client chiede accesso alla matrice
+            stampaMatrice(matrix, request->row, request->col);
+            printf("<Client> Attesa turno di gioco...\n");
+            semOp(semid, PLAYER, -1);   //Il primo client passa, il secondo si blocca
+            semOp(semid, PLAYER2, -1);  //Il client si blocca in attesa di autorizzazione dal server
+            printf("<Client> E' il tuo turno\n");
+            do{
+                printf("<Client> Scegli in quale colonna giocare: ");
+                scanf("%d", &input);
+                if(input < 1 || input > request->col)
+                    printf("<Client> La colonna non è all'interno della matrice\n");
+            }while(input < 1 || input > request->col);
+            request->input = input;
+            semOp(semid, REQUEST, 1);   //Sblocca il server che inserisce il gettone nella colonna richiesta
+            semOp(semid, MATRIX2, -1);   //Si blocca in attesa di permesso dal server per accedere alla matrice aggiornata
+            stampaMatrice(matrix, request->row, request->col);
+            printf("<Client> Turno terminato...\n");
+        }
     } else
         printf("semget failed\n");
     return 0;
