@@ -4,7 +4,9 @@
 
 struct Request
 {
-    int pid;
+    int turno;
+    int i; // indici del processo
+    int pid[2];
     int row;
     int col;
     char gettone;

@@ -14,21 +14,16 @@
 #include "../inc/shared_memory.h"
 #include "../inc/semaphore.h"
 
-#define REQUEST 0
-#define PLAYER 1
-#define PLAYER2 2
-#define MATRIX 3
-#define MATRIX2 4
-
 int create_sem_set(key_t semkey) {
     // Create a semaphore set with 2 semaphores
-    int semid = semget(semkey, 5, IPC_CREAT | S_IRUSR | S_IWUSR);
+    int semid = semget(semkey, 8, IPC_CREAT | S_IRUSR | S_IWUSR);
     if (semid == -1)
         errExit("semget failed");
 
     // Initialize the semaphore set
     union semun arg;
-    unsigned short values[] = {0, 1, 0, 0, 0};
+    // sem[0] sem[1] c in1 in2 mutex stampa
+    unsigned short values[] = {1, 0, 0, 0, 1, 1, 0, 0};
     arg.array = values;
 
     if (semctl(semid, 0, SETALL, arg) == -1)
@@ -143,15 +138,19 @@ int main (int argc, char *argv[]) {
 
 
     key_t key_matrix, key_request;
+
     printf("<Server> Creo la memoria condivisa per la matrice...\n");
     key_matrix = ftok("./", 'a');
     key_request = ftok("./", 'b');
+    
     int shmidServer = shmget(key_matrix, sizeof(char)*row*col, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     if(shmidServer == -1)
         errExit("shmget matrice fallito");
+    
     int shmidRequest = shmget(key_request, sizeof(struct Request), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     if(shmidRequest == -1)
         errExit("shmget request fallito");
+    
     printf("<Server> Collego la memoria condivisa per la matrice...\n");
     char *matrix = get_shared_memory(shmidServer, 0);
     struct Request *request = get_shared_memory(shmidRequest, 0); 
@@ -164,43 +163,60 @@ int main (int argc, char *argv[]) {
         for(j = 0; j < col; j++)
             *(matrix+(i*col)+j) = '/';
 
-    //Inizializzo semafori
+    // Inizializzazione semafori
+
+    int vittoria = 0;
     key_t key_sem = ftok("./", 'c');
-    int pid1, pid2, turno, client, vittoria = 0;
     int semid = create_sem_set(key_sem);
+    int client;
+    int turno;
+
     request->gettone = gettone1;
     printf("<Server> In attesa dei client\n");
-    semOp(semid, REQUEST, -1);  //Blocco il server in attesa del client 1
-    pid1 = request->pid;
+
+    request->i = 0;
+    request->turno = -1;
+
+    semOp(semid, C, -1);
     printf("<Server> Player 1 collegato\n");
-    request->gettone = gettone2;
-    semOp(semid, REQUEST, -1);  //Blocco il server in attesa del client 2
-    pid2 = request->pid;
+
+    semOp(semid, C, -1);
     printf("<Server> Player 2 collegato\n");
-    turno = pid1;
-    while(!vittoria){
-        if(turno == pid1){
+
+    // la variabile vittoria non serve se viene eseguito un exit nel ciclo
+
+    while(1){
+        // questo messaggio viene stampato due volte quando il primo player
+        // fa la prima giocata, bisogna capire dove mettere questa istruzione
+
+        printf("<Server> In attesa di giocata di player %i\n", request->turno + 1);
+        
+        semOp(semid, IN1, -1); // P(IN1) blocco in attesa dell'input del client
+
+        // controllo di chi è il turno per scegliere il gettone
+        semOp(semid, MUTEX, -1); // mutex per accesso alla var condivisa turno
+        if(request->turno == 0) {
+            semOp(semid, MUTEX, 1);
             request->gettone = gettone1;
             client = 1;
-        }else{
+        }
+        else {
+            semOp(semid, MUTEX, 1);
             request->gettone = gettone2;
             client = 2;
         }
-        semOp(semid, MATRIX, 1);    //Consente accesso alla matrice
-        printf("<Server> In attesa di giocata da Giocatore %d...\n", client);
-        semOp(semid, PLAYER2, 1);   //Autorizzo il client ad effettuare la giocata
-        semOp(semid, REQUEST, -1);  //Blocco il server in attesa di giocata
+
         InserisciGettone(request->input, matrix, row, col, request->gettone);
-        semOp(semid, MATRIX2, 1);    //Il server consente l'accesso alla matrice aggiornata
-        if(ControlloVittoria(matrix, row, col) != 1){   //Se il giocatore non ha vinto passo il turno
-            semOp(semid, PLAYER, 1);    //Sbloca il secondo client concedendogli il turno
-            turno = CambioTurno(pid1, pid2, turno);
-        }else{
-            vittoria = 1;
+        semOp(semid, STAMPA, 1);
+
+        if(ControlloVittoria(matrix, row, col) == 1){   //Se il giocatore non ha vinto passo il turno
             //Segnlare ai client che il gioco è terminato indicandone i vincitori
-            printf("<Server> Il Giocatore %d ha vinto!", client);
-            semOp(semid, MATRIX, 1);    //Consente di visualizzare la matrice anche al client che ha perso
+            printf("<Server> Il Giocatore %d ha vinto!\n", client);
+            // terminare gli altri due processi
+            exit(0);
         }
+        semOp(semid, IN2, 1);
+
     }
 
     free_shared_memory(request);
