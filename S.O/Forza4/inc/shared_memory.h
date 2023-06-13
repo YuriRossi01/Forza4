@@ -7,10 +7,12 @@ struct Request
     int turno;
     int i; // indici del processo
     int pid[2];
+    int pid_server;
     int row;
     int col;
     char gettone;
     int input;
+    int vittoria;
 };
 int alloc_shared_memory(key_t key, size_t size);
 

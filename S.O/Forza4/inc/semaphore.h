@@ -9,7 +9,8 @@
 #define IN2 4
 #define MUTEX 5
 #define STAMPA 6
-#define GETTONE 7
+#define TURNO 7
+#define PLAYER 8 // attesa che l'altro giocatore entri in campo
 
 //definition of the union semun
 union semun
@@ -20,4 +21,5 @@ union semun
 };
 
 void semOp(int semid, unsigned short sem_num, short sem_op);
+void remove_semaphore(int semid);
 #endif
