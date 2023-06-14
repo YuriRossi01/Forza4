@@ -14,6 +14,7 @@
 #include "../inc/errExit.h"
 #include "../inc/shared_memory.h"
 #include "../inc/semaphore.h"
+#include "../inc/matrix.h"
 
 //#define SIGUSR 10
 
@@ -26,28 +27,58 @@ struct ipc_id{
 // var globali
 // indirizzo alla struttura che memorizza gli id
 struct ipc_id * ipc;
+int index_client;
 
-void stampaMatrice(char * matrix, int row, int col){
-    int i, j;
-    printf("-------------------------------------------\n");
-    for(i = 0; i < row; i ++){
-        for(j = 0; j < col; j++)
-            printf("%c ", *(matrix+(i*col)+j));
-        printf("\n");
-    }
-    printf("-------------------------------------------\n");
+void time_out(int sig){
+    struct Request * request;
+    request = get_shared_memory(ipc->shared_memory[1], 0);
+
+    kill(request->pid_server, SIGUSR2);
 }
 
-// parametri:
-// matrice, input, colonne max della matrice
-int valid_input(char * matrix, int input, int col){
-    return (input <= col) && (input >= 1) && (*(matrix + input - 1) == '/'); // matrix[0][input - 1]
+// quando il server termina i due processi
+void ctrlc(int sig){
+    struct Request * request;
+    request = get_shared_memory(ipc->shared_memory[1], 0);
+
+    char * matrix;
+    matrix = get_shared_memory(ipc->shared_memory[0], 0);
+
+    if(request->vittoria == -1){
+        printf("Errore con il server\n");
+    }
+    else{ 
+        //stampaMatrice(matrix, request->row, request->col);
+
+        if(request->vittoria == index_client){
+            printf("Hai vinto!\n");
+        }
+        else {
+            printf("\rHai perso troppo tempo a fare la mossa! Vince l'avversario.\n");
+        }
+    }
+
+    exit(0);
 }
 
 // argv[1] -> nome
 // argv[2] -> opzione *
 int main(int argc, char const *argv[])
 {
+    int shmidMatrix; // id shmem matrice
+    int shmidRequest; // id shmem struttura request
+    int semid; // id della ipc dei semafori
+    key_t key_matrix, key_request; // chiavi delle ipc shmem
+    key_t key_sem; // chiave dei semafori
+
+    char * matrix; // puntatore alla shmem della matrice
+    struct Request * request; // puntatore alla shmem della struttura request
+
+    int input = 0;
+
+    // segnali
+    signal(SIGALRM, time_out);
+    signal(2, ctrlc);
 
     if(argc < 2){
         printf("Errore input\n");
@@ -56,31 +87,31 @@ int main(int argc, char const *argv[])
 
     ipc = (struct ipc_id *) malloc(sizeof(struct ipc_id));
 
-    //Prendo la memoria condivisa per la matrice
-    key_t key_matrix = ftok("./", 'a');
-    key_t key_request = ftok("./", 'b');
-    int shmidRequest = shmget(key_request, sizeof(struct Request), IPC_CREAT | S_IRUSR | S_IWUSR);
+    // creazione ipc memoria condivisa
+
+    key_matrix = ftok("./", 'a');
+    key_request = ftok("./", 'b');
+
+    shmidRequest = shmget(key_request, sizeof(struct Request), IPC_CREAT | S_IRUSR | S_IWUSR);
     if(shmidRequest == -1)
         errExit("shmget request fallito");
-    struct Request * request = get_shared_memory(shmidRequest, 0); 
-    int shmidServer = shmget(key_matrix, sizeof(char)*request->row*request->col, IPC_CREAT | S_IRUSR | S_IWUSR);
-    if(shmidServer == -1)
+    request = get_shared_memory(shmidRequest, 0);
+    
+    shmidMatrix = shmget(key_matrix, sizeof(char)*request->row*request->col, IPC_CREAT | S_IRUSR | S_IWUSR);
+    if(shmidMatrix == -1)
         errExit("shmget matrice fallito");
-    char *matrix = get_shared_memory(shmidServer, 0);
-    //Collego la memoria condivisa per la matrice
+    matrix = get_shared_memory(shmidMatrix, 0);
 
-    key_t key_sem = ftok("./", 'c');
-    int semid = semget(key_sem, 7, S_IRUSR | S_IWUSR);
-    int input = 0;
-    char in;
-    int index_client;
-
+    // creazione ipc semafori
+    key_sem = ftok("./", 'c');
+    
+    semid = semget(key_sem, 7, S_IRUSR | S_IWUSR);
     if(semid < 0){
         printf("Errore semafori\n");
         exit(1);
     }
 
-    ipc->shared_memory[0] = shmidServer;
+    ipc->shared_memory[0] = shmidMatrix;
     ipc->shared_memory[1] = shmidRequest;
 
     // inizializzazione dei pid e degli indici
@@ -109,10 +140,8 @@ int main(int argc, char const *argv[])
     // attendiamo che arrivi l'altro giocatore prima di iniziare
     semOp(semid, PLAYER, -1);
 
-    semOp(semid, MUTEX, -1);
     if(index_client == 0)
         printf("Attendi l'arrivo dell'altro giocatore...\n");
-    semOp(semid, MUTEX, 1);
 
     semOp(semid, PLAYER, 0);
 
@@ -145,13 +174,22 @@ int main(int argc, char const *argv[])
             printf("<Client> E' il tuo turno\n");
             do{
                 printf("<Client> Scegli in quale colonna giocare: ");
+
+                // allarme
+                int allarme = alarm(10);
+
                 scanf("%d", &input);
+
+                alarm(0);
+
                 if(!valid_input(matrix, input, request->col))
                     printf("<Client> La colonna non è all'interno della matrice oppure hai inserito il gettone in una colonna piena!\n");
             }while(!valid_input(matrix, input, request->col));
             request->input = input;
 
             semOp(semid, IN1, 1);
+
+            semOp(semid, VITTORIA, -1);
 
             semOp(semid, STAMPA, -1);
 
@@ -164,7 +202,11 @@ int main(int argc, char const *argv[])
     }
     semOp(semid, MUTEX, 1); // mutex vittoria
 
-    printf("Vincitore: giocatore %i\n", request->vittoria + 1);
+    if(index_client == request->vittoria)
+        printf("<%s> Hai vinto\n", argv[1]);
+    else {
+        printf("<%s> Hai perso\n", argv[1]);
+    }
 
     semOp(semid, REQUEST, -1);
 

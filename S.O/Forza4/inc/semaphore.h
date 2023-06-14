@@ -12,6 +12,7 @@
 #define TURNO 7
 #define PLAYER 8 // attesa che l'altro giocatore entri in campo
 #define REQUEST 9
+#define VITTORIA 10
 
 //definition of the union semun
 union semun

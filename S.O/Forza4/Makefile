@@ -5,11 +5,11 @@ FLAGS = -g -c
 
 all: Server Client
 
-Server: obj/errExit.o obj/F4Server.o obj/shared_memory.o obj/semaphore.o
-	$(GCC) obj/errExit.o obj/F4Server.o obj/semaphore.o obj/shared_memory.o -o exc/F4Server
+Server: obj/errExit.o obj/F4Server.o obj/shared_memory.o obj/semaphore.o obj/matrix.o
+	$(GCC) obj/errExit.o obj/F4Server.o obj/semaphore.o obj/shared_memory.o obj/matrix.o -o exc/F4Server
 
-Client: obj/errExit.o obj/F4Client.o obj/shared_memory.o obj/semaphore.o
-	$(GCC) obj/errExit.o obj/F4Client.o obj/semaphore.o obj/shared_memory.o -o exc/F4Client
+Client: obj/errExit.o obj/F4Client.o obj/shared_memory.o obj/semaphore.o obj/matrix.o
+	$(GCC) obj/errExit.o obj/F4Client.o obj/semaphore.o obj/shared_memory.o obj/matrix.o -o exc/F4Client
 
 obj/errExit.o: src/errExit.c
 	$(GCC) $(FLAGS) src/errExit.c	 -o obj/errExit.o
