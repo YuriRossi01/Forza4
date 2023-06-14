@@ -34,14 +34,14 @@ void remove_ipc(){
 
 int create_sem_set(key_t semkey) {
     // Create a semaphore set with 2 semaphores
-    int semid = semget(semkey, 9, IPC_CREAT | S_IRUSR | S_IWUSR);
+    int semid = semget(semkey, 10, IPC_CREAT | S_IRUSR | S_IWUSR);
     if (semid == -1)
         errExit("semget failed");
 
     // Initialize the semaphore set
     union semun arg;
     // sem[0] sem[1] c in1 in2 mutex stampa
-    unsigned short values[] = {1, 0, 0, 0, 1, 1, 0, 0, 2};
+    unsigned short values[] = {1, 0, 0, 0, 1, 1, 0, 0, 2, 2};
     arg.array = values;
 
     if (semctl(semid, 0, SETALL, arg) == -1)
@@ -159,16 +159,15 @@ void casual_game(){
     int shmidRequest = ipc->shared_memory[1];
     char * matrix = get_shared_memory(shmidServer, 0);
     struct Request *request = get_shared_memory(shmidRequest, 0);
-    int index;
+    int index_client;
     int input;
 
     srand(time(NULL));
 
-
     // inizializzazione dei pid e degli indici
     semOp(semid, MUTEX, -1);
-    index = request->i;
-    request->pid[index] = getpid();
+    index_client = request->i;
+    request->pid[index_client] = getpid();
     request->i ++;
     semOp(semid, MUTEX, 1);
 
@@ -179,53 +178,55 @@ void casual_game(){
     // sblocco dell'altro giocatore che aspetta che player arrivi a 0
     semOp(semid, PLAYER, -1);
 
-    while(!request->vittoria){
+    semOp(semid, MUTEX, -1); // mutex vittoria
+    while(request->vittoria == -1){
+        semOp(semid, MUTEX, 1); // mutex vittoria
+
         if(request->turno != -1){ // stampa solo quando almeno uno ha fatto una giocata
             write(1, "Tocca all'avversario...\n", 24); // faccio con write a causa del buffer, 1 indica lo stdout
         }
 
-        semOp(semid, index, -1); // P(sem[index])
+        semOp(semid, index_client, -1); // P(sem[index_client])
 
-        if(request->turno != -1){ // se turno = -1 vuol dire che il primo giocatore non ha ancora fatto la sua giocata
+        if(request->turno != -1) { // se turno = -1 vuol dire che il primo giocatore non ha ancora fatto la sua giocata
             printf("L'avversario ha giocato:\n");
             stampaMatrice(matrix, request->row, request->col);
         }
 
-        semOp(semid, IN2, -1);
+        if(request->vittoria == -1) {
+            semOp(semid, IN2, -1);
 
-        // è il mio turno
-        semOp(semid, MUTEX, -1);
-        request->turno = index;
-        semOp(semid, MUTEX, 1);
+            // è il mio turno
+            semOp(semid, MUTEX, -1);
+            request->turno = index_client;
+            semOp(semid, MUTEX, 1);
 
-        semOp(semid, TURNO, 1);
+            semOp(semid, TURNO, 1);
 
-        if(request->vittoria == 1)  //Quando sblocco il client in attesa del turno controllo se il giocatore prima di lui ha vinto
-            printf("Hai perso\n");
-        else {
-            printf("<Server> E' il tuo turno\n");
+            printf("<Server> Selezione input\n");
             do{
-                printf("<Server> Scegli in quale colonna giocare: ");
                 input = rand() % request->col + 1;
                 if(!valid_input(matrix, input, request->col))
-                    printf("<Server> La colonna non è all'interno della matrice oppure hai inserito il gettone in una colonna piena!\n");
+                    printf("Input non valido, ritento\n");
             }while(!valid_input(matrix, input, request->col));
             request->input = input;
 
             semOp(semid, IN1, 1);
 
             semOp(semid, STAMPA, -1);
+
             stampaMatrice(matrix, request->row, request->col);
-
-            if(request->vittoria == 1)  //Se il client che ha eseguito la giocata ha vinto
-                printf("Hai vinto!\n");
-            else    //Altrimenti termino il turno
-                printf("Turno terminato...\n");
-
-            semOp(semid, (index == 1) ? 0 : 1, 1);
         }
         
+        semOp(semid, (index_client == 1) ? 0 : 1, 1);
+
+        semOp(semid, MUTEX, -1); // mutex vittoria
     }
+    semOp(semid, MUTEX, 1); // mutex vittoria
+
+    printf("Vincitore: giocatore %i\n", request->vittoria + 1);
+
+    semOp(semid, REQUEST, -1);
 }
 
 void casual_game_handler(int sig){
@@ -301,7 +302,7 @@ int main (int argc, char *argv[]) {
     request->row = row;
     request->col = col;
     request->pid_server = getpid();
-    request->vittoria = 0;
+    request->vittoria = -1;
     
     printf("<Server> Matrice pronta... (%d %d)\n", request->col, request->row);
 
@@ -335,7 +336,10 @@ int main (int argc, char *argv[]) {
 
     // la variabile vittoria non serve se viene eseguito un exit nel ciclo
 
-    while(!request->vittoria){
+    semOp(semid, MUTEX, -1);
+    while(request->vittoria == -1){
+        semOp(semid, MUTEX, 1);
+
         // questo messaggio viene stampato due volte quando il primo player
         // fa la prima giocata, bisogna capire dove mettere questa istruzione
 
@@ -360,17 +364,24 @@ int main (int argc, char *argv[]) {
         InserisciGettone(request->input, matrix, row, col, request->gettone);
         semOp(semid, STAMPA, 1);
 
-        if(ControlloVittoria(matrix, row, col) == 1){   //Se il giocatore non ha vinto passo il turno
-            //Segnlare ai client che il gioco è terminato indicandone i vincitori
-            printf("<Server> Il Giocatore %d ha vinto!\n", client);
-            request->vittoria = 1;
-
-            // terminare gli altri due processi
-            //exit(0);
-        }
         semOp(semid, IN2, 1);
 
+        if(ControlloVittoria(matrix, row, col) == 1){
+            printf("<Server> Il Giocatore %d ha vinto!\n", client);
+            semOp(semid, MUTEX, -1);
+            request->vittoria = request->turno;
+            semOp(semid, MUTEX, 1);
+        }
+        //semOp(semid, REQUEST, -2);
+
+        semOp(semid, MUTEX, -1);
     }
+    semOp(semid, MUTEX, 1); // mutex vittoria
+
+    // il server prima di terminare aspetta i due client
+
+    semOp(semid, REQUEST, 0);
+
 
     free_shared_memory(request);
     free_shared_memory(matrix);

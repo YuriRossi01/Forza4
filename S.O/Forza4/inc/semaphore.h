@@ -11,6 +11,7 @@
 #define STAMPA 6
 #define TURNO 7
 #define PLAYER 8 // attesa che l'altro giocatore entri in campo
+#define REQUEST 9
 
 //definition of the union semun
 union semun

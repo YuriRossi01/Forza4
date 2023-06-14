@@ -17,6 +17,16 @@
 
 //#define SIGUSR 10
 
+// memorizza gli id delle ipc
+struct ipc_id{
+    int semaphore;
+    int shared_memory[2];
+};
+
+// var globali
+// indirizzo alla struttura che memorizza gli id
+struct ipc_id * ipc;
+
 void stampaMatrice(char * matrix, int row, int col){
     int i, j;
     printf("-------------------------------------------\n");
@@ -44,6 +54,8 @@ int main(int argc, char const *argv[])
         exit(1);
     }
 
+    ipc = (struct ipc_id *) malloc(sizeof(struct ipc_id));
+
     //Prendo la memoria condivisa per la matrice
     key_t key_matrix = ftok("./", 'a');
     key_t key_request = ftok("./", 'b');
@@ -61,27 +73,27 @@ int main(int argc, char const *argv[])
     int semid = semget(key_sem, 7, S_IRUSR | S_IWUSR);
     int input = 0;
     char in;
-    int index; // indice del processo
+    int index_client;
 
     if(semid < 0){
         printf("Errore semafori\n");
         exit(1);
     }
 
-    // controllare poi che il server arrivi prima dei client
-    // controllare che il primo client attendi il secondo
+    ipc->shared_memory[0] = shmidServer;
+    ipc->shared_memory[1] = shmidRequest;
 
     // inizializzazione dei pid e degli indici
     semOp(semid, MUTEX, -1);
-    index = request->i;
+    index_client = request->i;
 
     // se arriva un terzo client lo facciamo terminare
-    if(index >= 2){
+    if(index_client >= 2){
         printf("C'è già una partita in corso!\n");
         exit(0);
     }
 
-    request->pid[index] = getpid();
+    request->pid[index_client] = getpid();
     request->i ++;
     semOp(semid, MUTEX, 1);
 
@@ -98,38 +110,38 @@ int main(int argc, char const *argv[])
     semOp(semid, PLAYER, -1);
 
     semOp(semid, MUTEX, -1);
-    if(index == 0)
+    if(index_client == 0)
         printf("Attendi l'arrivo dell'altro giocatore...\n");
     semOp(semid, MUTEX, 1);
 
     semOp(semid, PLAYER, 0);
 
-    while(!request->vittoria){
+    semOp(semid, MUTEX, -1); // mutex vittoria
+    while(request->vittoria == -1){
+        semOp(semid, MUTEX, 1); // mutex vittoria
+
 
         if(request->turno != -1){ // stampa solo quando almeno uno ha fatto una giocata
             write(1, "Tocca all'avversario...\n", 24); // faccio con write a causa del buffer, 1 indica lo stdout
         }
 
-        semOp(semid, index, -1); // P(sem[index])
+        semOp(semid, index_client, -1); // P(sem[index_client])
 
-        if(request->turno != -1){ // se turno = -1 vuol dire che il primo giocatore non ha ancora fatto la sua giocata
+        if(request->turno != -1) { // se turno = -1 vuol dire che il primo giocatore non ha ancora fatto la sua giocata
             printf("L'avversario ha giocato:\n");
             stampaMatrice(matrix, request->row, request->col);
         }
 
-        semOp(semid, IN2, -1);
+        if(request->vittoria == -1) {
+            semOp(semid, IN2, -1);
 
-        // è il mio turno
-        semOp(semid, MUTEX, -1);
-        request->turno = index;
-        semOp(semid, MUTEX, 1);
+            // è il mio turno
+            semOp(semid, MUTEX, -1);
+            request->turno = index_client;
+            semOp(semid, MUTEX, 1);
 
-        semOp(semid, TURNO, 1);
+            semOp(semid, TURNO, 1);
 
-        if(request->vittoria == 1){  //Quando sblocco il client in attesa del turno controllo se il giocatore prima di lui ha vinto
-            printf("<%s> Hai perso\n", argv[1]);
-        }
-        else {
             printf("<Client> E' il tuo turno\n");
             do{
                 printf("<Client> Scegli in quale colonna giocare: ");
@@ -142,19 +154,19 @@ int main(int argc, char const *argv[])
             semOp(semid, IN1, 1);
 
             semOp(semid, STAMPA, -1);
+
             stampaMatrice(matrix, request->row, request->col);
-
-            if(request->vittoria == 1)  //Se il client che ha eseguito la giocata ha vinto
-                printf("<%s> Hai vinto!\n", argv[1]);
-            else    //Altrimenti termino il turno
-                printf("<%s> Turno terminato...\n", argv[1]);
-
-            semOp(semid, (index == 1) ? 0 : 1, 1);
-            printf("bloccato %i\n", index);
         }
-
         
+        semOp(semid, (index_client == 1) ? 0 : 1, 1);
+
+        semOp(semid, MUTEX, -1); // mutex vittoria
     }
+    semOp(semid, MUTEX, 1); // mutex vittoria
+
+    printf("Vincitore: giocatore %i\n", request->vittoria + 1);
+
+    semOp(semid, REQUEST, -1);
 
     return 0;
 }
