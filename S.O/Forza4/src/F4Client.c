@@ -25,38 +25,48 @@ struct ipc_id{
 };
 
 // var globali
-// indirizzo alla struttura che memorizza gli id
-struct ipc_id * ipc;
-int index_client;
 
+struct ipc_id * ipc; // indirizzo alla struttura che memorizza gli id
+int index_client; // indice del client
+
+// il client ha perso troppo tempo a fare la mossa
 void time_out(int sig){
     struct Request * request;
     request = get_shared_memory(ipc->shared_memory[1], 0);
 
-    kill(request->pid_server, SIGUSR2);
+    request->signal_index = index_client;
+
+    kill(request->pid_server, SIGALRM);
+    printf("\rHai perso troppo tempo a fare la mossa! Vince l'avversario.\n");
+
+    free_shared_memory(request);
 }
 
-// quando il server termina i due processi
-void ctrlc(int sig){
+// il client è terminato spontaneamente
+void quit(int sig){
     struct Request * request;
     request = get_shared_memory(ipc->shared_memory[1], 0);
 
-    char * matrix;
-    matrix = get_shared_memory(ipc->shared_memory[0], 0);
+    request->signal_index = index_client;
 
-    if(request->vittoria == -1){
-        printf("Errore con il server\n");
-    }
-    else{ 
-        //stampaMatrice(matrix, request->row, request->col);
+    kill(request->pid_server, SIGUSR2);
+    free_shared_memory(request);
+}
 
-        if(request->vittoria == index_client){
-            printf("Hai vinto!\n");
-        }
-        else {
-            printf("\rHai perso troppo tempo a fare la mossa! Vince l'avversario.\n");
-        }
+// quando il server termina i due processi
+void term(int sig){
+    struct Request * request;
+    request = get_shared_memory(ipc->shared_memory[1], 0);
+
+    if(request->vittoria == -1 && request->pid[1] != -1){ // se c'è un solo giocatore e termina
+        printf("\n\rIl server è stato terminato.\n");
     }
+    else if(request->vittoria == index_client){
+        printf("\rL'avversario si è scollegato, hai vinto!\n");
+    }
+
+    free_shared_memory(request);
+    free(ipc);
 
     exit(0);
 }
@@ -76,16 +86,17 @@ int main(int argc, char const *argv[])
 
     int input = 0;
 
+    ipc = (struct ipc_id *) malloc(sizeof(struct ipc_id));
+
     // segnali
     signal(SIGALRM, time_out);
-    signal(2, ctrlc);
+    signal(SIGINT, quit);
+    signal(SIGTERM, term);
 
     if(argc < 2){
         printf("Errore input\n");
         exit(1);
     }
-
-    ipc = (struct ipc_id *) malloc(sizeof(struct ipc_id));
 
     // creazione ipc memoria condivisa
 
@@ -149,7 +160,6 @@ int main(int argc, char const *argv[])
     while(request->vittoria == -1){
         semOp(semid, MUTEX, 1); // mutex vittoria
 
-
         if(request->turno != -1){ // stampa solo quando almeno uno ha fatto una giocata
             write(1, "Tocca all'avversario...\n", 24); // faccio con write a causa del buffer, 1 indica lo stdout
         }
@@ -171,19 +181,19 @@ int main(int argc, char const *argv[])
 
             semOp(semid, TURNO, 1);
 
-            printf("<Client> E' il tuo turno\n");
+            printf("<%s> E' il tuo turno\n", argv[1]);
             do{
-                printf("<Client> Scegli in quale colonna giocare: ");
+                printf("<%s> Scegli in quale colonna giocare: ", argv[1]);
 
                 // allarme
-                int allarme = alarm(10);
+                alarm(request->time_out);
 
                 scanf("%d", &input);
 
                 alarm(0);
 
                 if(!valid_input(matrix, input, request->col))
-                    printf("<Client> La colonna non è all'interno della matrice oppure hai inserito il gettone in una colonna piena!\n");
+                    printf("<%s> La colonna non è all'interno della matrice oppure hai inserito il gettone in una colonna piena!\n", argv[1]);
             }while(!valid_input(matrix, input, request->col));
             request->input = input;
 
@@ -207,6 +217,10 @@ int main(int argc, char const *argv[])
     else {
         printf("<%s> Hai perso\n", argv[1]);
     }
+
+    free_shared_memory(request);
+    free_shared_memory(matrix);
+    free(ipc);
 
     semOp(semid, REQUEST, -1);
 

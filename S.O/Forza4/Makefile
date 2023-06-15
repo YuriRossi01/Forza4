@@ -1,6 +1,4 @@
 GCC = gcc
-AS_FLAGS= --32 -gstabs
-LD_FLAGS=-m elf_i386
 FLAGS = -g -c
 
 all: Server Client

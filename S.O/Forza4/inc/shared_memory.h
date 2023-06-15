@@ -13,7 +13,10 @@ struct Request
     char gettone;
     int input;
     int vittoria;
+    int signal_index; // indice di chi ha mandato un segnale
+    int time_out; // secondi di timeout impostati dal server
 };
+
 int alloc_shared_memory(key_t key, size_t size);
 
 void *get_shared_memory(int shmid, int shmflag);

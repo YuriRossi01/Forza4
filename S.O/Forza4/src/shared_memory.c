@@ -9,13 +9,6 @@
 #include "../inc/errExit.h"
 #include "../inc/shared_memory.h"
 
-/*int alloc_shared_memory(key_t key, size_t size){
-    int shmid = shmget(key, size, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-    if(shmid == -1)
-        errExit("shmget fallito");
-    return shmid;
-}*/
-
 void *get_shared_memory(int shmid, int shmflg){
     void *ptr_sh = shmat(shmid, NULL, shmflg);
     if(ptr_sh == (void * )-1)
@@ -25,8 +18,8 @@ void *get_shared_memory(int shmid, int shmflg){
 
 
 void free_shared_memory(void *ptr_sh){
-    if(shmdt(ptr_sh)==-1)
-        errExit("hmdt falito");
+    if(shmdt(ptr_sh) == -1)
+        errExit("shmdt falito");
 }
 
 void remove_shared_memory(int shmid){

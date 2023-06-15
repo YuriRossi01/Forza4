@@ -53,16 +53,42 @@ int create_sem_set(key_t semkey) {
 
 void second_ctrlc(int sig){
     struct Request *request = get_shared_memory(ipc->shared_memory[1], 0);
+
     printf("\rGrazie per aver giocato!\n");
+    
     remove_ipc();
-    kill(request->pid[0], 2);
-    kill(request->pid[1], 2);
+    if(request->pid[0] != -1)
+        kill(request->pid[0], SIGTERM);
+    if(request->pid[1] != -1)
+        kill(request->pid[1], SIGTERM);
+    
     exit(0);
 }
 
 void first_ctrlc(int sig){
     printf("\r<Server> Premere nuovamente Ctrl-c per terminare l'esecuzione\n");
     signal(2, second_ctrlc);
+}
+
+// un client si è scollegato
+void term_client(int sig){
+    struct Request *request = get_shared_memory(ipc->shared_memory[1], 0);
+
+    // se ci sono entrambi i giocatori
+    if(request->pid[1] != -1){
+        printf("<Server> Un client si è scollegato\n");
+        request->vittoria = (request->signal_index == 0) ? 1 : 0;
+    }
+
+    if(request->pid[0] != -1)
+        kill(request->pid[0], SIGTERM);
+    if(request->pid[1] != -1)
+        kill(request->pid[1], SIGTERM);
+
+    free_shared_memory(request);
+    remove_ipc();
+
+    exit(0);
 }
 
 void casual_game(){
@@ -142,6 +168,9 @@ void casual_game(){
         printf("Hai perso\n");
     }
 
+    free_shared_memory(request);
+    free_shared_memory(matrix);
+
     semOp(semid, REQUEST, -1);
 }
 
@@ -152,9 +181,10 @@ void casual_game_handler(int sig){
     if(pid == 0){
 
         // reimposto i segnali di default
-        signal(2, SIG_DFL);
+        signal(SIGINT, SIG_DFL);
         signal(SIGUSR1, SIG_DFL);
         signal(SIGUSR2, SIG_DFL);
+        signal(SIGALRM, SIG_DFL);
         
         casual_game();
         exit(0);
@@ -167,10 +197,12 @@ void time_out(int sig){
 
     printf("Il Giocatore ha impiegato troppo tempo a fare la mossa.\n");
 
-    request->vittoria = (request->turno == 0) ? 1 : 0;
+    request->vittoria = (request->signal_index == 0) ? 1 : 0;
 
-    kill(request->pid[0], 2);
-    kill(request->pid[1], 2);
+    if(request->pid[0] != -1)
+        kill(request->pid[0], SIGTERM);
+    if(request->pid[1] != -1)
+        kill(request->pid[1], SIGTERM);
 
     free_shared_memory(request);
     remove_ipc();
@@ -203,7 +235,8 @@ int main (int argc, char *argv[]) {
     // segnali
     signal(2, first_ctrlc);
     signal(SIGUSR1, casual_game_handler);
-    signal(SIGUSR2, time_out);
+    signal(SIGALRM, time_out);
+    signal(SIGUSR2, term_client);
 
     // controllo parametri
     if (argc != 5){
@@ -221,7 +254,7 @@ int main (int argc, char *argv[]) {
         exit(1);
     }
 
-    //Lettura gettoni
+    // Lettura gettoni
     if (gettone1 != G1 && gettone1 != G2){
         printf("<Server> argv[3] devi mettere i gettoni O o X\n");
         exit(1);
@@ -256,6 +289,9 @@ int main (int argc, char *argv[]) {
     request->col = col;
     request->pid_server = getpid();
     request->vittoria = -1;
+    request->pid[0] = -1;
+    request->pid[1] = -1;
+    request->time_out = 10;
     
     printf("<Server> Matrice pronta... (%d %d)\n", request->col, request->row);
 
@@ -283,14 +319,9 @@ int main (int argc, char *argv[]) {
     semOp(semid, C, -1);
     printf("<Server> Player 2 collegato\n");
 
-    // la variabile vittoria non serve se viene eseguito un exit nel ciclo
-
     semOp(semid, MUTEX, -1);
     while(request->vittoria == -1){
         semOp(semid, MUTEX, 1);
-
-        // questo messaggio viene stampato due volte quando il primo player
-        // fa la prima giocata, bisogna capire dove mettere questa istruzione
 
         semOp(semid, TURNO, -1);
         printf("<Server> In attesa di giocata di player %i\n", request->turno + 1);
@@ -333,7 +364,6 @@ int main (int argc, char *argv[]) {
     // sono ancora attivi
 
     semOp(semid, REQUEST, 0);
-
 
     free_shared_memory(request);
     free_shared_memory(matrix);
