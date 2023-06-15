@@ -21,20 +21,11 @@ obj/F4Client.o: src/F4Client.c
 obj/matrix.o: src/matrix.c
 	$(GCC) $(FLAGS) src/matrix.c -o obj/matrix.o
 
-obj/order.o: src/order.c
-	$(GCC) $(FLAGS) src/order.c -o obj/order.o
-
-obj/prova.o: src/prova.c
-	$(GCC) $(FLAGS) src/prova.c -o obj/prova.o
-
 obj/semaphore.o: src/semaphore.c
 	$(GCC) $(FLAGS) src/semaphore.c -o obj/semaphore.o
 
 obj/shared_memory.o: src/shared_memory.c
 	$(GCC) $(FLAGS) src/shared_memory.c -o obj/shared_memory.o
-
-obj/sleep.o: src/sleep.c
-	$(GCC) $(FLAGS) src/sleep.c -o obj/sleep.o
 
 .PHONY: clean
 

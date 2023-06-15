@@ -85,6 +85,7 @@ int main(int argc, char const *argv[])
     struct Request * request; // puntatore alla shmem della struttura request
 
     int input = 0;
+    int mossa = 0;  //Ritorno metodo valid_input
 
     ipc = (struct ipc_id *) malloc(sizeof(struct ipc_id));
 
@@ -141,6 +142,7 @@ int main(int argc, char const *argv[])
 
     semOp(semid, C, 1); // sblocco server
 
+    printf("Gioco Forza4\tGiocatore: %s (%c)\n", argv[1], request->gettone);
     stampaMatrice(matrix, request->row, request->col);
 
     // partita casuale
@@ -192,9 +194,12 @@ int main(int argc, char const *argv[])
 
                 alarm(0);
 
-                if(!valid_input(matrix, input, request->col))
-                    printf("<%s> La colonna non è all'interno della matrice oppure hai inserito il gettone in una colonna piena!\n", argv[1]);
-            }while(!valid_input(matrix, input, request->col));
+                mossa = valid_input(matrix, input, request->col);
+                if(!mossa && (input < 1 || input > request->col))
+                    printf("<%s> La colonna non è all'interno della matrice!\n", argv[1]);
+                else if(!mossa)
+                    printf("<%s> Hai inserito il gettone in una colonna piena!\n", argv[1]);
+            }while(!mossa);
             request->input = input;
 
             semOp(semid, IN1, 1);
@@ -214,9 +219,10 @@ int main(int argc, char const *argv[])
 
     if(index_client == request->vittoria)
         printf("<%s> Hai vinto\n", argv[1]);
-    else {
+    else if(request->vittoria != 2)    // se non è pareggio
         printf("<%s> Hai perso\n", argv[1]);
-    }
+    else
+        printf("<%s> Pareggio\n", argv[1]);
 
     free_shared_memory(request);
     free_shared_memory(matrix);

@@ -145,7 +145,7 @@ void casual_game(){
             do{
                 input = rand() % request->col + 1;
                 if(!valid_input(matrix, input, request->col))
-                    printf("Input non valido, ritento\n");
+                    printf("Colonna piena, ritento\n");
             }while(!valid_input(matrix, input, request->col));
             request->input = input;
 
@@ -162,11 +162,12 @@ void casual_game(){
     }
     semOp(semid, MUTEX, 1); // mutex vittoria
 
-    if(request->turno == request->vittoria)
+    if(index_client == request->vittoria)
         printf("Hai vinto\n");
-    else {
+    else if(request->vittoria != 2)
         printf("Hai perso\n");
-    }
+    else
+        printf("Pareggio\n");
 
     free_shared_memory(request);
     free_shared_memory(matrix);
@@ -225,10 +226,6 @@ int main (int argc, char *argv[]) {
 
     char * matrix; // puntatore alla shmem della matrice
     struct Request * request; // puntatore alla shmem della struttura request
-
-    int client;
-    int turno;
-    int vittoria = 0;
 
     ipc = (struct ipc_id *) malloc(sizeof(struct ipc_id));
 
@@ -307,15 +304,16 @@ int main (int argc, char *argv[]) {
 
     ipc->semaphore = semid;
 
-    request->gettone = gettone1;
     printf("<Server> In attesa dei client\n");
 
     request->i = 0;
     request->turno = -1;
 
+    request->gettone = gettone1;
     semOp(semid, C, -1);
     printf("<Server> Player 1 collegato\n");
 
+    request->gettone = gettone2;
     semOp(semid, C, -1);
     printf("<Server> Player 2 collegato\n");
 
@@ -333,12 +331,10 @@ int main (int argc, char *argv[]) {
         if(request->turno == 0) {
             semOp(semid, MUTEX, 1);
             request->gettone = gettone1;
-            client = 1;
         }
         else {
             semOp(semid, MUTEX, 1);
             request->gettone = gettone2;
-            client = 2;
         }
 
         InserisciGettone(request->input, matrix, row, col, request->gettone);
@@ -347,12 +343,16 @@ int main (int argc, char *argv[]) {
         semOp(semid, IN2, 1);
 
         if(ControlloVittoria(matrix, row, col) == 1){
-            printf("<Server> Il Giocatore %d ha vinto!\n", client);
+            printf("<Server> Il Giocatore %d ha vinto!\n", request->turno +1);
             semOp(semid, MUTEX, -1);
             request->vittoria = request->turno;
             semOp(semid, MUTEX, 1);
+        }else if(MatricePiena(matrix, row, col) == 1){   // la matrice è piena, la partita termina in parità
+            printf("<Server> La partita si chiude in parità\n");
+            semOp(semid, MUTEX, -1);
+            request->vittoria = 2;  // il 2 rappresenta il pareggio
+            semOp(semid, MUTEX, 1);
         }
-
         semOp(semid, VITTORIA, 1);
 
         semOp(semid, MUTEX, -1);
