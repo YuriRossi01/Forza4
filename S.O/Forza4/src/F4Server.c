@@ -41,7 +41,6 @@ int create_sem_set(key_t semkey) {
 
     // Initialize the semaphore set
     union semun arg;
-    // sem[0] sem[1] c in1 in2 mutex stampa
     unsigned short values[] = {1, 0, 0, 0, 1, 1, 0, 0, 2, 2, 0};
     arg.array = values;
 
@@ -74,11 +73,9 @@ void first_ctrlc(int sig){
 void term_client(int sig){
     struct Request *request = get_shared_memory(ipc->shared_memory[1], 0);
 
-    // se ci sono entrambi i giocatori
-    if(request->pid[1] != -1){
-        printf("<Server> Un client si è scollegato\n");
-        request->vittoria = (request->signal_index == 0) ? 1 : 0;
-    }
+    printf("<Server> Player %i si è scollegato\n", request->signal_index + 1);
+    request->vittoria = (request->signal_index == 0) ? 1 : 0;
+    
 
     if(request->pid[0] != -1)
         kill(request->pid[0], SIGTERM);
@@ -172,7 +169,7 @@ void casual_game(){
     free_shared_memory(request);
     free_shared_memory(matrix);
 
-    semOp(semid, REQUEST, -1);
+    semOp(semid, TERMINE, -1);
 }
 
 void casual_game_handler(int sig){
@@ -212,12 +209,12 @@ void time_out(int sig){
 }
 
 int main (int argc, char *argv[]) {
-    int col = atoi(argv[2]);
-    int row = atoi(argv[1]);
+    int col;
+    int row;
     char G1 = 'O';
     char G2 = 'X';
-    char gettone1 = *argv[3];
-    char gettone2 = *argv[4];
+    char gettone1;
+    char gettone2;
     int shmidMatrix; // id shmem matrice
     int shmidRequest; // id shmem struttura request
     int semid; // id della ipc dei semafori
@@ -240,6 +237,12 @@ int main (int argc, char *argv[]) {
         printf("<Server> Devi inserire %s nRighe nColonne e i 2 gettoni->(O e X)\n", argv[0]);
         exit(1);
     }
+
+    // atoi ritorna 0 in caso di fallimento
+    col = atoi(argv[2]);
+    row = atoi(argv[1]);
+    gettone1 = *argv[3];
+    gettone2 = *argv[4];
 
     // Lettura dimensione matrice
     if(row <= 4){
@@ -267,7 +270,7 @@ int main (int argc, char *argv[]) {
     key_matrix = ftok("./", 'a');
     key_request = ftok("./", 'b');
     
-    shmidMatrix = shmget(key_matrix, sizeof(char)*row*col, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    shmidMatrix = shmget(key_matrix, sizeof(char) * row * col, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     if(shmidMatrix == -1)
         errExit("shmget matrice fallito");
     
@@ -288,7 +291,7 @@ int main (int argc, char *argv[]) {
     request->vittoria = -1;
     request->pid[0] = -1;
     request->pid[1] = -1;
-    request->time_out = 10;
+    request->time_out = 20;
     
     printf("<Server> Matrice pronta... (%d %d)\n", request->col, request->row);
 
@@ -363,7 +366,7 @@ int main (int argc, char *argv[]) {
     // altrimenti vengono rimossi i semafori mentre i client
     // sono ancora attivi
 
-    semOp(semid, REQUEST, 0);
+    semOp(semid, TERMINE, 0);
 
     free_shared_memory(request);
     free_shared_memory(matrix);

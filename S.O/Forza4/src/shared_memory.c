@@ -23,7 +23,7 @@ void free_shared_memory(void *ptr_sh){
 }
 
 void remove_shared_memory(int shmid){
-    if(shmctl(shmid, IPC_RMID,NULL)==-1)
+    if(shmctl(shmid, IPC_RMID,NULL) == -1)
         errExit("shmctl fallito");
 }
 

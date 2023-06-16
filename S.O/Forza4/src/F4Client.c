@@ -47,6 +47,8 @@ void quit(int sig){
     struct Request * request;
     request = get_shared_memory(ipc->shared_memory[1], 0);
 
+    printf("\r");
+
     request->signal_index = index_client;
 
     kill(request->pid_server, SIGUSR2);
@@ -85,7 +87,7 @@ int main(int argc, char const *argv[])
     struct Request * request; // puntatore alla shmem della struttura request
 
     int input = 0;
-    int mossa = 0;  //Ritorno metodo valid_input
+    int mossa = 0;  // Ritorno metodo valid_input
 
     ipc = (struct ipc_id *) malloc(sizeof(struct ipc_id));
 
@@ -95,7 +97,8 @@ int main(int argc, char const *argv[])
     signal(SIGTERM, term);
 
     if(argc < 2){
-        printf("Errore input\n");
+        printf("Errore: devi anche inserire un nome per il gicoatore, ad esempio:\n");
+        printf("%s giocatore1\n", argv[0]);
         exit(1);
     }
 
@@ -133,6 +136,27 @@ int main(int argc, char const *argv[])
     // se arriva un terzo client lo facciamo terminare
     if(index_client >= 2){
         printf("C'è già una partita in corso!\n");
+        semOp(semid, MUTEX, 1);
+
+        free_shared_memory(request);
+        free_shared_memory(matrix);
+        free(ipc);
+
+        exit(0);
+    }
+
+    // se il secondo giocatore vuole fare una partita casuale
+    // ma c'è già un giocatore che ha richiesto di fare una
+    // partita normale, facciamo terminare il secondo giocatore
+
+    if(index_client >= 1 && argc >= 3 && strcmp(argv[2], "*") == 0){
+        printf("C'è già un giocatore che ha richiesto una partita normale!\n");
+        semOp(semid, MUTEX, 1);
+        
+        free_shared_memory(request);
+        free_shared_memory(matrix);
+        free(ipc);
+
         exit(0);
     }
 
@@ -187,12 +211,9 @@ int main(int argc, char const *argv[])
             do{
                 printf("<%s> Scegli in quale colonna giocare: ", argv[1]);
 
-                // allarme
-                alarm(request->time_out);
-
+                alarm(request->time_out); // imposto l'allarme
                 scanf("%d", &input);
-
-                alarm(0);
+                alarm(0); // disattivo l'allarme
 
                 mossa = valid_input(matrix, input, request->col);
                 if(!mossa && (input < 1 || input > request->col))
@@ -228,7 +249,7 @@ int main(int argc, char const *argv[])
     free_shared_memory(matrix);
     free(ipc);
 
-    semOp(semid, REQUEST, -1);
+    semOp(semid, TERMINE, -1);
 
     return 0;
 }
