@@ -238,12 +238,6 @@ int main (int argc, char *argv[]) {
         exit(1);
     }
 
-    // atoi ritorna 0 in caso di fallimento
-    col = atoi(argv[2]);
-    row = atoi(argv[1]);
-    gettone1 = *argv[3];
-    gettone2 = *argv[4];
-
     // Lettura dimensione matrice
     if(row <= 4){
         printf("<Server> Le righe della matrice devono essere almeno di 5\n");
@@ -263,6 +257,12 @@ int main (int argc, char *argv[]) {
         printf("<Server> argv[4] devi mettere i gettoni O o X\n");
         exit(1);
     }
+
+    // atoi ritorna 0 in caso di fallimento
+    col = atoi(argv[2]);
+    row = atoi(argv[1]);
+    gettone1 = *argv[3];
+    gettone2 = *argv[4];
 
     // creazione delle ipc di memoria condivisa
 
