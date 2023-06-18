@@ -226,8 +226,6 @@ int main (int argc, char *argv[]) {
     char * matrix; // puntatore alla shmem della matrice
     struct Request * request; // puntatore alla shmem della struttura request
 
-    ipc = (struct ipc_id *) malloc(sizeof(struct ipc_id));
-
     // segnali
     signal(2, first_ctrlc);
     signal(SIGUSR1, casual_game_handler);
@@ -279,6 +277,8 @@ int main (int argc, char *argv[]) {
     shmidRequest = shmget(key_request, sizeof(struct Request), IPC_CREAT | IPC_EXCL | PERM);
     if(shmidRequest == -1)
         errExit("shmget request fallito");
+
+    ipc = (struct ipc_id *) malloc(sizeof(struct ipc_id));
 
     ipc->shared_memory[0] = shmidMatrix;
     ipc->shared_memory[1] = shmidRequest;

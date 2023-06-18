@@ -89,8 +89,6 @@ int main(int argc, char const *argv[])
     int input = 0;
     int mossa = 0;  // Ritorno metodo valid_input
 
-    ipc = (struct ipc_id *) malloc(sizeof(struct ipc_id));
-
     // segnali
     signal(SIGALRM, time_out);
     signal(SIGINT, quit);
@@ -107,12 +105,14 @@ int main(int argc, char const *argv[])
     key_matrix = ftok("./", 'a');
     key_request = ftok("./", 'b');
 
-    shmidRequest = shmget(key_request, sizeof(struct Request), IPC_CREAT | PERM);
-    if(shmidRequest == -1)
+    shmidRequest = shmget(key_request, sizeof(struct Request), PERM);
+    if(shmidRequest == -1){
+        printf("Il server non è stato ancora avviato\n");
         errExit("shmget request fallito");
+    }
     request = get_shared_memory(shmidRequest, 0);
     
-    shmidMatrix = shmget(key_matrix, sizeof(char)*request->row*request->col, IPC_CREAT | PERM);
+    shmidMatrix = shmget(key_matrix, sizeof(char)*request->row*request->col, PERM);
     if(shmidMatrix == -1)
         errExit("shmget matrice fallito");
     matrix = get_shared_memory(shmidMatrix, 0);
@@ -123,8 +123,12 @@ int main(int argc, char const *argv[])
     semid = semget(key_sem, 7, PERM);
     if(semid < 0){
         printf("Errore semafori\n");
+        free_shared_memory(request);
+        free_shared_memory(matrix);
         exit(1);
     }
+
+    ipc = (struct ipc_id *) malloc(sizeof(struct ipc_id));
 
     ipc->shared_memory[0] = shmidMatrix;
     ipc->shared_memory[1] = shmidRequest;
