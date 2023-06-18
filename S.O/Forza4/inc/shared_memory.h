@@ -17,8 +17,6 @@ struct Request
     int time_out; // secondi di timeout impostati dal server
 };
 
-int alloc_shared_memory(key_t key, size_t size);
-
 void *get_shared_memory(int shmid, int shmflag);
 
 void free_shared_memory( void *ptr_sh);

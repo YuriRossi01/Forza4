@@ -1,5 +1,5 @@
 GCC = gcc
-FLAGS = -g -c
+FLAGS = -g -c -Wall
 
 all: Server Client
 
