@@ -22,6 +22,8 @@ struct ipc_id{
     int shared_memory[2];
 };
 
+#define PERM S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH
+
 // var globali
 // indirizzo alla struttura che memorizza gli id
 struct ipc_id * ipc;
@@ -35,7 +37,7 @@ void remove_ipc(){
 
 int create_sem_set(key_t semkey) {
     // Create a semaphore set with 2 semaphores
-    int semid = semget(semkey, 11, IPC_CREAT | S_IRUSR | S_IWUSR);
+    int semid = semget(semkey, 11, IPC_CREAT | PERM);
     if (semid == -1)
         errExit("semget failed");
 
@@ -270,11 +272,11 @@ int main (int argc, char *argv[]) {
     key_matrix = ftok("./", 'a');
     key_request = ftok("./", 'b');
     
-    shmidMatrix = shmget(key_matrix, sizeof(char) * row * col, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    shmidMatrix = shmget(key_matrix, sizeof(char) * row * col, IPC_CREAT | IPC_EXCL | PERM);
     if(shmidMatrix == -1)
         errExit("shmget matrice fallito");
     
-    shmidRequest = shmget(key_request, sizeof(struct Request), IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    shmidRequest = shmget(key_request, sizeof(struct Request), IPC_CREAT | IPC_EXCL | PERM);
     if(shmidRequest == -1)
         errExit("shmget request fallito");
 

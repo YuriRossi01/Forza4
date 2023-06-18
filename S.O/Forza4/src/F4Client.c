@@ -16,13 +16,13 @@
 #include "../inc/semaphore.h"
 #include "../inc/matrix.h"
 
-//#define SIGUSR 10
-
 // memorizza gli id delle ipc
 struct ipc_id{
     int semaphore;
     int shared_memory[2];
 };
+
+#define PERM S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH
 
 // var globali
 
@@ -107,12 +107,12 @@ int main(int argc, char const *argv[])
     key_matrix = ftok("./", 'a');
     key_request = ftok("./", 'b');
 
-    shmidRequest = shmget(key_request, sizeof(struct Request), IPC_CREAT | S_IRUSR | S_IWUSR);
+    shmidRequest = shmget(key_request, sizeof(struct Request), IPC_CREAT | PERM);
     if(shmidRequest == -1)
         errExit("shmget request fallito");
     request = get_shared_memory(shmidRequest, 0);
     
-    shmidMatrix = shmget(key_matrix, sizeof(char)*request->row*request->col, IPC_CREAT | S_IRUSR | S_IWUSR);
+    shmidMatrix = shmget(key_matrix, sizeof(char)*request->row*request->col, IPC_CREAT | PERM);
     if(shmidMatrix == -1)
         errExit("shmget matrice fallito");
     matrix = get_shared_memory(shmidMatrix, 0);
@@ -120,7 +120,7 @@ int main(int argc, char const *argv[])
     // creazione ipc semafori
     key_sem = ftok("./", 'c');
     
-    semid = semget(key_sem, 7, S_IRUSR | S_IWUSR);
+    semid = semget(key_sem, 7, PERM);
     if(semid < 0){
         printf("Errore semafori\n");
         exit(1);
